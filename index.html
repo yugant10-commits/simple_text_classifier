@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Classification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            min-height: 60px;
+            display: none;
+        }
+        .result.show {
+            display: block;
+        }
+        .category {
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .confidence {
+            color: #666;
+            margin-top: 5px;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 2s linear infinite;
+            display: none;
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .batch-container {
+            margin-top: 30px;
+            border-top: 1px solid #ddd;
+            padding-top: 20px;
+        }
+        .batch-result {
+            margin-top: 20px;
+        }
+        .batch-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        .batch-item:nth-child(odd) {
+            background-color: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+    <h1>News Classification</h1>
+    
+    <div class="container">
+        <h2>Single Article Classification</h2>
+        <textarea id="news-text" placeholder="Enter news article text here..."></textarea>
+        <button id="classify-btn">Classify</button>
+        <div class="loader" id="loader"></div>
+        
+        <div class="result" id="result">
+            <div>Category: <span class="category" id="category"></span></div>
+            <div class="confidence">Confidence: <span id="confidence"></span></div>
+        </div>
+    </div>
+    
+    <div class="batch-container container">
+        <h2>Batch Classification</h2>
+        <p>Enter multiple articles, one per line:</p>
+        <textarea id="batch-text" placeholder="Enter multiple news articles, one per line..."></textarea>
+        <button id="batch-classify-btn">Classify All</button>
+        <div class="loader" id="batch-loader"></div>
+        
+        <div class="batch-result" id="batch-result"></div>
+    </div>
+
+    <script>
+        // Single classification
+        document.getElementById('classify-btn').addEventListener('click', async () => {
+            const text = document.getElementById('news-text').value.trim();
+            if (!text) {
+                alert('Please enter text to classify');
+                return;
+            }
+            
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('result').classList.remove('show');
+            
+            try {
+                const response = await fetch('/api/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                
+                const data = await response.json();
+                
+                document.getElementById('category').textContent = data.category;
+                document.getElementById('confidence').textContent = data.confidence;
+                document.getElementById('result').classList.add('show');
+            } catch (error) {
+                alert('Error classifying text: ' + error.message);
+            } finally {
+                document.getElementById('loader').style.display = 'none';
+            }
+        });
+        
+        // Batch classification
+        document.getElementById('batch-classify-btn').addEventListener('click', async () => {
+    const textArea = document.getElementById('batch-text').value.trim();
+    if (!textArea) {
+        alert('Please enter text to classify');
+        return;
+    }
+    
+    // Split by line breaks and filter out empty lines
+    const texts = textArea.split('\n').filter(text => text.trim() !== '');
+    
+    document.getElementById('batch-loader').style.display = 'block';
+    document.getElementById('batch-result').innerHTML = '';
+    
+    try {
+        const response = await fetch('/api/batch-predict', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ texts })
+        });
+        
+        const data = await response.json();
+        
+        // Display results
+        const resultContainer = document.getElementById('batch-result');
+        
+        for (let i = 0; i < texts.length; i++) {
+            // Create a result item for each article
+            const item = document.createElement('div');
+            item.className = 'batch-item';
+            
+            if (i < data.length) {
+                item.innerHTML = `
+                    <strong>Article ${i+1}:</strong> ${texts[i].substring(0, 70)}${texts[i].length > 70 ? '...' : ''}
+                    <div>Category: <span class="category">${data[i].category}</span></div>
+                    <div class="confidence">Confidence: ${data[i].confidence}</div>
+                `;
+            } else {
+                item.innerHTML = `
+                    <strong>Article ${i+1}:</strong> ${texts[i].substring(0, 70)}${texts[i].length > 70 ? '...' : ''}
+                    <div>Error: No classification result returned</div>
+                `;
+            }
+            
+            resultContainer.appendChild(item);
+        }
+    } catch (error) {
+        alert('Error classifying batch text: ' + error.message);
+        console.error(error);
+    } finally {
+        document.getElementById('batch-loader').style.display = 'none';
+    }
+});
+    </script>
+</body>
+</html>
